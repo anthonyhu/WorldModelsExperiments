@@ -17,7 +17,7 @@ MAX_TRIALS = 200 # just use this to extract one trial.
 
 render_mode = False # for debugging.
 
-DIR_NAME = 'record'
+DIR_NAME = '/data/cvfs/ah2029/datasets/gym/carracing/'
 if not os.path.exists(DIR_NAME):
     os.makedirs(DIR_NAME)
 
