@@ -5,9 +5,12 @@ saves ~ 200 episodes generated from a random policy
 import numpy as np
 import random
 import os
+
 import gym
 
 from model import make_model
+
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 MAX_FRAMES = 1000 # max length of carracing
 MAX_TRIALS = 200 # just use this to extract one trial. 
