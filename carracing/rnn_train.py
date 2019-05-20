@@ -15,6 +15,7 @@ from vae.vae import ConvVAE, reset_graph
 from rnn.rnn import HyperParams, MDNRNN
 
 ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
+NUM_DATA = 2500
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=str, required=True, help='gpu to use')
