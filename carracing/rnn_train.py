@@ -11,7 +11,7 @@ import tensorflow as tf
 import random
 import time
 
-from vae.vae import ConvVAE, reset_graph, NUM_DATA
+from vae.vae import ConvVAE, reset_graph
 from rnn.rnn import HyperParams, MDNRNN
 
 ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
