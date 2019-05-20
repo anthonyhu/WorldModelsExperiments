@@ -85,7 +85,7 @@ batch_size = hps_model.batch_size
 # save 1000 initial mu and logvars:
 initial_mu = np.copy(data_mu[:1000, 0, :]*10000).astype(np.int).tolist()
 initial_logvar = np.copy(data_logvar[:1000, 0, :]*10000).astype(np.int).tolist()
-with open(os.path.join(initial_z_save_path, "initial_z.json"), 'wt') as outfile:
+with open(os.path.join(initial_z_save_path, "initial_z_" + args.vae_name + ".json"), 'wt') as outfile:
   json.dump([initial_mu, initial_logvar], outfile, sort_keys=True, indent=0, separators=(',', ': '))
 
 reset_graph()
@@ -111,7 +111,7 @@ for local_step in range(hps.num_steps):
     start = time.time()
     output_log = "step: %d, lr: %.6f, cost: %.4f, train_time_taken: %.4f" % (step, curr_learning_rate, train_cost, time_taken)
     print(output_log)
-    rnn.save_json(os.path.join(model_save_path, "rnn.json"))
+    rnn.save_json(os.path.join(model_save_path, "rnn_" + args.vae_name + ".json"))
 
 # save the model (don't bother with tf checkpoints json all the way ...)
-rnn.save_json(os.path.join(model_save_path, "rnn.json"))
+rnn.save_json(os.path.join(model_save_path, "rnn_" + args.vae_name + ".json"))
