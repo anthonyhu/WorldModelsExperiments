@@ -13,6 +13,10 @@ np.set_printoptions(precision=4, edgeitems=6, linewidth=100, suppress=True)
 
 from vae.vae import ConvVAE, reset_graph
 
+ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
+NUM_DATA = 2500
+NUM_FRAMES = 500
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=str, required=True, help='gpu to use')
 parser.add_argument('--beta', type=float, required=True, help='beta coefficient')
@@ -20,7 +24,6 @@ parser.add_argument('--beta', type=float, required=True, help='beta coefficient'
 args = parser.parse_args()
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
 
 # Hyperparameters for ConvVAE
 z_size=32
@@ -32,8 +35,7 @@ beta = args.beta # beta-VAE coefficient
 # Parameters for training
 NUM_EPOCH = 10
 DATA_DIR = os.path.join(ROOT, 'record')
-NUM_DATA = 2500
-NUM_FRAMES = 500
+
 
 model_save_path = os.path.join(ROOT, 'tf_vae')
 if not os.path.exists(model_save_path):

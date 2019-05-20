@@ -10,7 +10,9 @@ import json
 import tensorflow as tf
 import random
 from vae.vae import ConvVAE, reset_graph
-from vae_train import ROOT, NUM_DATA
+
+ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
+NUM_DATA = 2500
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=str, required=True, help='gpu to use')

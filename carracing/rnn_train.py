@@ -12,8 +12,9 @@ import random
 import time
 
 from vae.vae import ConvVAE, reset_graph, NUM_DATA
-from vae_train import ROOT
 from rnn.rnn import HyperParams, MDNRNN
+
+ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=str, required=True, help='gpu to use')
