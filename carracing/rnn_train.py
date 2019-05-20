@@ -12,7 +12,7 @@ import random
 import time
 
 from vae.vae import ConvVAE, reset_graph, NUM_DATA
-from vae.vae_train import ROOT
+from vae_train import ROOT
 from rnn.rnn import HyperParams, MDNRNN
 
 parser = argparse.ArgumentParser()

@@ -10,7 +10,7 @@ import json
 import tensorflow as tf
 import random
 from vae.vae import ConvVAE, reset_graph
-from vae.vae_train import ROOT, NUM_DATA
+from vae_train import ROOT, NUM_DATA
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=str, required=True, help='gpu to use')
