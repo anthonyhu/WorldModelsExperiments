@@ -6,22 +6,31 @@ also save 1000 initial mu and logvar, for generative experiments (not related to
 import numpy as np
 import os
 import json
+import argparse
 import tensorflow as tf
 import random
 import time
 
-from vae.vae import ConvVAE, reset_graph
+from vae.vae import ConvVAE, reset_graph, NUM_DATA
+from vae.vae_train import ROOT
 from rnn.rnn import HyperParams, MDNRNN
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+parser = argparse.ArgumentParser()
+parser.add_argument('--gpu', type=str, required=True, help='gpu to use')
+parser.add_argument('--vae_name', type=str, required=True, help='name of the vae')
+
+args = parser.parse_args()
+
+os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 np.set_printoptions(precision=4, edgeitems=6, linewidth=100, suppress=True)
 
-DATA_DIR = "series"
-model_save_path = "tf_rnn"
+DATA_DIR = os.path.join(ROOT, 'series_' + args.vae_name)
+
+model_save_path = os.path.join(ROOT, 'tf_rnn')
 if not os.path.exists(model_save_path):
   os.makedirs(model_save_path)
   
-initial_z_save_path = "tf_initial_z"
+initial_z_save_path = os.path.join(ROOT, 'tf_initial_z')
 if not os.path.exists(initial_z_save_path):
   os.makedirs(initial_z_save_path)
 
@@ -67,12 +76,14 @@ data_action =  raw_data["action"]
 max_seq_len = hps_model.max_seq_len
 
 N_data = len(data_mu) # should be 10k
+assert N_data == NUM_DATA, 'Data size do not match'
+print('Training with {} records.'.format(N_data))
 batch_size = hps_model.batch_size
 
 # save 1000 initial mu and logvars:
 initial_mu = np.copy(data_mu[:1000, 0, :]*10000).astype(np.int).tolist()
 initial_logvar = np.copy(data_logvar[:1000, 0, :]*10000).astype(np.int).tolist()
-with open(os.path.join("tf_initial_z", "initial_z.json"), 'wt') as outfile:
+with open(os.path.join(initial_z_save_path, "initial_z.json"), 'wt') as outfile:
   json.dump([initial_mu, initial_logvar], outfile, sort_keys=True, indent=0, separators=(',', ': '))
 
 reset_graph()
@@ -98,6 +109,7 @@ for local_step in range(hps.num_steps):
     start = time.time()
     output_log = "step: %d, lr: %.6f, cost: %.4f, train_time_taken: %.4f" % (step, curr_learning_rate, train_cost, time_taken)
     print(output_log)
+    rnn.save_json(os.path.join(model_save_path, "rnn.json"))
 
 # save the model (don't bother with tf checkpoints json all the way ...)
 rnn.save_json(os.path.join(model_save_path, "rnn.json"))

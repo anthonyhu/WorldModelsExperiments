@@ -11,12 +11,13 @@ def reset_graph():
   tf.reset_default_graph()
 
 class ConvVAE(object):
-  def __init__(self, z_size=32, batch_size=1, learning_rate=0.0001, kl_tolerance=0.5, is_training=False, reuse=False, gpu_mode=False):
+  def __init__(self, z_size=32, batch_size=1, learning_rate=0.0001, kl_tolerance=0.5, beta=1.0, is_training=False, reuse=False, gpu_mode=False):
     self.z_size = z_size
     self.batch_size = batch_size
     self.learning_rate = learning_rate
     self.is_training = is_training
     self.kl_tolerance = kl_tolerance
+    self.beta = beta
     self.reuse = reuse
     with tf.variable_scope('conv_vae', reuse=self.reuse):
       if not gpu_mode:
@@ -73,7 +74,7 @@ class ConvVAE(object):
           (1 + self.logvar - tf.square(self.mu) - tf.exp(self.logvar)),
           reduction_indices = 1
         )
-        self.kl_loss = tf.maximum(self.kl_loss, self.kl_tolerance * self.z_size)
+        self.kl_loss = tf.maximum(self.beta * self.kl_loss, self.kl_tolerance * self.z_size)
         self.kl_loss = tf.reduce_mean(self.kl_loss)
         
         self.loss = self.r_loss + self.kl_loss

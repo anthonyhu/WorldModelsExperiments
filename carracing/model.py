@@ -1,6 +1,7 @@
 import numpy as np
 import random
 
+import os
 import json
 import sys
 
@@ -9,6 +10,8 @@ import time
 
 from vae.vae import ConvVAE
 from rnn.rnn import hps_sample, MDNRNN, rnn_init_state, rnn_next_state, rnn_output, rnn_output_size
+
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 render_mode = True
 

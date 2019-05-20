@@ -1,0 +1,8 @@
+*.npz
+*.json
+*.ipynb
+
+.idea/
+__pycache__/
+*.svg
+*.png

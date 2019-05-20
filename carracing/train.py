@@ -430,10 +430,10 @@ if __name__ == "__main__":
                                                 'using pepg, ses, openes, ga, cma'))
   
   parser.add_argument('-o', '--optimizer', type=str, help='ses, pepg, openes, ga, cma.', default='cma')
-  parser.add_argument('--num_episode', type=int, default=16, help='num episodes per trial')
-  parser.add_argument('--eval_steps', type=int, default=25, help='evaluate every eval_steps step')
-  parser.add_argument('-n', '--num_worker', type=int, default=64)
-  parser.add_argument('-t', '--num_worker_trial', type=int, help='trials per worker', default=1)
+  parser.add_argument('--num_episode', type=int, default=5, help='num episodes per trial')  # was 16
+  parser.add_argument('--eval_steps', type=int, default=5, help='evaluate every eval_steps step')  # was 25, each eval correspond to each worker doing num_episodes
+  parser.add_argument('-n', '--num_worker', type=int, default=12)  # was 64
+  parser.add_argument('-t', '--num_worker_trial', type=int, help='trials per worker', default=1)  # was 1
   parser.add_argument('--antithetic', type=int, default=1, help='set to 0 to disable antithetic sampling')
   parser.add_argument('--cap_time', type=int, default=0, help='set to 0 to disable capping timesteps to 2x of average.')
   parser.add_argument('--retrain', type=int, default=0, help='set to 0 to disable retraining every eval_steps if results suck.\n only works w/ ses, openes, pepg.')

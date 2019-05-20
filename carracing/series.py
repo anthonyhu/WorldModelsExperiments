@@ -5,16 +5,23 @@ all the dataset files into one dataset called series/series.npz
 
 import numpy as np
 import os
+import argparse
 import json
 import tensorflow as tf
 import random
 from vae.vae import ConvVAE, reset_graph
+from vae.vae_train import ROOT, NUM_DATA
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+parser = argparse.ArgumentParser()
+parser.add_argument('--gpu', type=str, required=True, help='gpu to use')
+parser.add_argument('--vae_name', type=str, required=True, help='name of the vae')
+args = parser.parse_args()
 
-DATA_DIR = "record"
-SERIES_DIR = "series"
-model_path_name = "tf_vae"
+os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+
+DATA_DIR = os.path.join(ROOT, 'record')
+SERIES_DIR = os.path.join(ROOT, 'series_' + args.vae_name)
+model_path_name = os.path.join(ROOT, 'tf_vae')
 
 if not os.path.exists(SERIES_DIR):
     os.makedirs(SERIES_DIR)
@@ -55,7 +62,7 @@ kl_tolerance=0.5
 
 filelist = os.listdir(DATA_DIR)
 filelist.sort()
-filelist = filelist[0:10000]
+filelist = filelist[0:NUM_DATA]
 
 dataset, action_dataset = load_raw_data_list(filelist)
 
@@ -69,7 +76,7 @@ vae = ConvVAE(z_size=z_size,
               reuse=False,
               gpu_mode=True) # use GPU on batchsize of 1000 -> much faster
 
-vae.load_json(os.path.join(model_path_name, 'vae.json'))
+vae.load_json(os.path.join(model_path_name, args.vae_name + '.json'))
 
 mu_dataset = []
 logvar_dataset = []

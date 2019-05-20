@@ -13,11 +13,11 @@ from model import make_model
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 MAX_FRAMES = 1000 # max length of carracing
-MAX_TRIALS = 200 # just use this to extract one trial. 
+MAX_TRIALS = 700 # just use this to extract one trial.
 
 render_mode = False # for debugging.
 
-DIR_NAME = '/data/cvfs/ah2029/datasets/gym/carracing/'
+DIR_NAME = 'record'
 if not os.path.exists(DIR_NAME):
     os.makedirs(DIR_NAME)
 
