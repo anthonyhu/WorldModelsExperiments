@@ -10,11 +10,15 @@ from scipy.misc import toimage as toimage
 from gym.spaces.box import Box
 from gym.utils import seeding
 
+ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+initial_z_filename = os.path.join(ROOT, 'tf_initial_z', 'initial_z_vae_beta_5.0.json')
+
 SCREEN_X = 64
 SCREEN_Y = 64
 FACTOR = 8
 
-with open(os.path.join('initial_z', 'initial_z.json'), 'r') as f:
+with open(initial_z_filename, 'r') as f:
   [initial_mu, initial_logvar] = json.load(f)
 
 initial_mu_logvar = [list(elem) for elem in zip(initial_mu, initial_logvar)]

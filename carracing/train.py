@@ -23,6 +23,7 @@ from es import CMAES, SimpleGA, OpenES, PEPG
 import argparse
 import time
 
+ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
 ### ES related code
 num_episode = 1
 eval_steps = 25 # evaluate every N_eval steps
@@ -60,10 +61,11 @@ RESULT_PACKET_SIZE = 4*num_worker_trial
 ###
 
 def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
-  global population, filebase, game, model, num_params, es, PRECISION, SOLUTION_PACKET_SIZE, RESULT_PACKET_SIZE
+  global population, filebase, game, model, num_params, es, PRECISION, SOLUTION_PACKET_SIZE, RESULT_PACKET_SIZE, vae_name
   population = num_worker * num_worker_trial
-  filebase = 'log/'+gamename+'.'+optimizer+'.'+str(num_episode)+'.'+str(population)
-  model = make_model()
+  os.makedirs(os.path.join(ROOT, 'log'), exist_ok=True)
+  filebase = os.path.join(ROOT, 'log', gamename+'.'+optimizer+'.'+ vae_name + '.' + str(num_episode)+'.'+str(population))
+  model = make_model(vae_name, load_model=True)
   num_params = model.param_count
   print("size of model", num_params)
 
@@ -381,7 +383,7 @@ def master():
 
 
 def main(args):
-  global optimizer, num_episode, eval_steps, num_worker, num_worker_trial, antithetic, seed_start, retrain_mode, cap_time_mode
+  global optimizer, num_episode, eval_steps, num_worker, num_worker_trial, antithetic, seed_start, retrain_mode, cap_time_mode, vae_name
 
   optimizer = args.optimizer
   num_episode = args.num_episode
@@ -392,6 +394,7 @@ def main(args):
   retrain_mode = (args.retrain == 1)
   cap_time_mode= (args.cap_time == 1)
   seed_start = args.seed_start
+  vae_name = args.vae_name
 
   initialize_settings(args.sigma_init, args.sigma_decay)
 
@@ -440,6 +443,7 @@ if __name__ == "__main__":
   parser.add_argument('-s', '--seed_start', type=int, default=0, help='initial seed')
   parser.add_argument('--sigma_init', type=float, default=0.1, help='sigma_init')
   parser.add_argument('--sigma_decay', type=float, default=0.999, help='sigma_decay')
+  parser.add_argument('--vae_name', type=str, required=True, help='model name')
 
   args = parser.parse_args()
   if "parent" == mpi_fork(args.num_worker+1): os.exit()

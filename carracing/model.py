@@ -11,7 +11,10 @@ import time
 from vae.vae import ConvVAE
 from rnn.rnn import hps_sample, MDNRNN, rnn_init_state, rnn_next_state, rnn_output, rnn_output_size
 
+ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
+vae_path = os.path.join(ROOT, 'tf_vae')
+rnn_path = os.path.join(ROOT, 'tf_rnn')
 
 render_mode = True
 
@@ -24,9 +27,9 @@ MODE_ZH = 4
 
 EXP_MODE = MODE_ZH
 
-def make_model(load_model=True):
+def make_model(vae_name, load_model=True):
   # can be extended in the future.
-  model = Model(load_model=load_model)
+  model = Model(vae_name=vae_name, load_model=load_model)
   return model
 
 def sigmoid(x):
@@ -50,15 +53,16 @@ def sample(p):
 
 class Model:
   ''' simple one layer model for car racing '''
-  def __init__(self, load_model=True):
+  def __init__(self, vae_name, load_model=True):
+    self.vae_name = vae_name
     self.env_name = "carracing"
     self.vae = ConvVAE(batch_size=1, gpu_mode=False, is_training=False, reuse=True)
 
     self.rnn = MDNRNN(hps_sample, gpu_mode=False, reuse=True)
 
     if load_model:
-      self.vae.load_json('vae/vae.json')
-      self.rnn.load_json('rnn/rnn.json')
+      self.vae.load_json(os.path.join(vae_path, self.vae_name + '.json'))
+      self.rnn.load_json(os.path.join(rnn_path, 'rnn_' + self.vae_name + '.json'))
 
     self.state = rnn_init_state(self.rnn)
     self.rnn_mode = True

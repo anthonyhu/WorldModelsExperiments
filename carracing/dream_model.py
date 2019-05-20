@@ -13,7 +13,11 @@ import time
 from vae.vae import ConvVAE
 from rnn.rnn import hps_sample, MDNRNN, rnn_init_state, rnn_next_state, rnn_output, rnn_output_size
 
+# TODO: not valid pathnames
+ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
+vae_path = os.path.join(ROOT, 'tf_vae')
+rnn_path = os.path.join(ROOT, 'tf_rnn')
 
 render_mode = True
 
@@ -59,8 +63,8 @@ class Model:
     self.rnn = MDNRNN(hps_sample, gpu_mode=False, reuse=True)
 
     if load_model:
-      self.vae.load_json('vae/vae.json')
-      self.rnn.load_json('rnn/rnn.json')
+      self.vae.load_json(vae_filename)
+      self.rnn.load_json(rnn_filename)
 
     self.state = rnn_init_state(self.rnn)
     self.rnn_mode = True

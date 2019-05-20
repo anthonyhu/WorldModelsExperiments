@@ -5,10 +5,16 @@ saves ~ 200 episodes generated from a random policy
 import numpy as np
 import random
 import os
+import argparse
 
 import gym
 
 from model import make_model
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--record', type=str, required=True, help='record name')
+
+args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
@@ -17,11 +23,13 @@ MAX_TRIALS = 700 # just use this to extract one trial.
 
 render_mode = False # for debugging.
 
-DIR_NAME = 'record'
+ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
+
+DIR_NAME = os.path.join(ROOT, args.record)
 if not os.path.exists(DIR_NAME):
     os.makedirs(DIR_NAME)
 
-model = make_model(load_model=False)
+model = make_model(vae_name='', load_model=False)
 
 total_frames = 0
 model.make_env(render_mode=render_mode, full_episode=True)
