@@ -13,13 +13,14 @@ from model import make_model
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--record', type=str, required=True, help='record name')
+parser.add_argument('--full_model_path', type=str, default='', help='full model path [containing all weights]')
 
 args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 MAX_FRAMES = 1000 # max length of carracing
-MAX_TRIALS = 700 # just use this to extract one trial.
+MAX_TRIALS = 250 # just use this to extract one trial.
 
 render_mode = False # for debugging.
 
@@ -29,7 +30,10 @@ DIR_NAME = os.path.join(ROOT, args.record)
 if not os.path.exists(DIR_NAME):
     os.makedirs(DIR_NAME)
 
-model = make_model(vae_name='', load_model=False)
+if args.full_model_path:
+  model = make_model(vae_name='', load_model=False, load_full_model=True, full_model_path=args.full_model_path)
+else:
+  model = make_model(vae_name='', load_model=False)
 
 total_frames = 0
 model.make_env(render_mode=render_mode, full_episode=True)
@@ -44,7 +48,10 @@ for trial in range(MAX_TRIALS): # 200 trials per worker
     model.env.seed(random_generated_int)
 
     # random policy
-    model.init_random_model_params(stdev=np.random.rand()*0.01)
+    if args.full_model_path:
+      model.load_model(os.path.join(args.full_model_path, 'log', 'carracing.cma.5.12.best.json'))
+    else:
+      model.init_random_model_params(stdev=np.random.rand()*0.01)
 
     model.reset()
     obs = model.env.reset() # pixels

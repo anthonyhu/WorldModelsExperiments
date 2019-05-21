@@ -16,13 +16,15 @@ NUM_DATA = 2500
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=str, required=True, help='gpu to use')
-parser.add_argument('--vae_name', type=str, required=True, help='name of the vae')
+parser.add_argument('--record', type=str, required=True, help='record directory')
+parser.add_argument('--name', type=str, required=True, help='model name prefix')
+
 args = parser.parse_args()
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-DATA_DIR = os.path.join(ROOT, 'record')
-SERIES_DIR = os.path.join(ROOT, 'series_' + args.vae_name)
+DATA_DIR = os.path.join(ROOT, args.record)
+SERIES_DIR = os.path.join(ROOT, 'series')
 model_path_name = os.path.join(ROOT, 'tf_vae')
 
 if not os.path.exists(SERIES_DIR):
@@ -78,7 +80,7 @@ vae = ConvVAE(z_size=z_size,
               reuse=False,
               gpu_mode=True) # use GPU on batchsize of 1000 -> much faster
 
-vae.load_json(os.path.join(model_path_name, args.vae_name + '.json'))
+vae.load_json(os.path.join(model_path_name, args.name + '_vae.json'))
 
 mu_dataset = []
 logvar_dataset = []
@@ -94,4 +96,4 @@ action_dataset = np.array(action_dataset)
 mu_dataset = np.array(mu_dataset)
 logvar_dataset = np.array(logvar_dataset)
 
-np.savez_compressed(os.path.join(SERIES_DIR, "series.npz"), action=action_dataset, mu=mu_dataset, logvar=logvar_dataset)
+np.savez_compressed(os.path.join(SERIES_DIR, args.name + '_series.npz'), action=action_dataset, mu=mu_dataset, logvar=logvar_dataset)

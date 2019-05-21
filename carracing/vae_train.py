@@ -15,12 +15,13 @@ from vae.vae import ConvVAE, reset_graph
 
 ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
 NUM_DATA = 2500
-NUM_FRAMES = 500
+NUM_FRAMES = 1000
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=str, required=True, help='gpu to use')
 parser.add_argument('--beta', type=float, required=True, help='beta coefficient')
-
+parser.add_argument('--record', type=str, required=True, help='record directory')
+parser.add_argument('--name', type=str, required=True, help='model name prefix')
 args = parser.parse_args()
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -34,7 +35,7 @@ beta = args.beta # beta-VAE coefficient
 
 # Parameters for training
 NUM_EPOCH = 10
-DATA_DIR = os.path.join(ROOT, 'record')
+DATA_DIR = os.path.join(ROOT, args.record)
 
 
 model_save_path = os.path.join(ROOT, 'tf_vae')
@@ -59,7 +60,7 @@ def create_dataset(filelist, N=10000, M=1000): # N is 10000 episodes, M is numbe
   idx = 0
   for i in range(N):
     filename = filelist[i]
-    raw_data = np.load(os.path.join(ROOT, "record", filename))['obs'][:M]
+    raw_data = np.load(os.path.join(DATA_DIR, filename))['obs'][:M]
     l = len(raw_data)
     if (idx+l) > (M*N):
       data = data[0:idx]
@@ -114,7 +115,7 @@ for epoch in range(NUM_EPOCH):
     if ((train_step+1) % 500 == 0):
       print("step", (train_step+1), train_loss, r_loss, kl_loss)
     if ((train_step+1) % 5000 == 0):
-      vae.save_json(os.path.join(model_save_path, 'vae_beta_{:.1f}.json'.format(beta)))
+      vae.save_json(os.path.join(model_save_path, args.name + '_vae.json'.format(beta)))
 
 # finished, final model:
-vae.save_json(os.path.join(model_save_path, 'vae_beta_{:.1f}.json'.format(beta)))
+vae.save_json(os.path.join(model_save_path, args.name + '_vae.json'.format(beta)))

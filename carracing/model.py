@@ -27,9 +27,9 @@ MODE_ZH = 4
 
 EXP_MODE = MODE_ZH
 
-def make_model(vae_name, load_model=True):
+def make_model(model_name='', load_model=True, load_full_model=False, full_model_path=''):
   # can be extended in the future.
-  model = Model(vae_name=vae_name, load_model=load_model)
+  model = Model(model_name=model_name, load_model=load_model, load_full_model=load_full_model, full_model_path=full_model_path)
   return model
 
 def sigmoid(x):
@@ -53,16 +53,19 @@ def sample(p):
 
 class Model:
   ''' simple one layer model for car racing '''
-  def __init__(self, vae_name, load_model=True):
-    self.vae_name = vae_name
+  def __init__(self, model_name='', load_model=True, load_full_model=False, full_model_path=''):
+    self.model_name = model_name
     self.env_name = "carracing"
     self.vae = ConvVAE(batch_size=1, gpu_mode=False, is_training=False, reuse=True)
 
     self.rnn = MDNRNN(hps_sample, gpu_mode=False, reuse=True)
 
-    if load_model:
-      self.vae.load_json(os.path.join(vae_path, self.vae_name + '.json'))
-      self.rnn.load_json(os.path.join(rnn_path, 'rnn_' + self.vae_name + '.json'))
+    if load_full_model:
+      self.vae.load_json(os.path.join(full_model_path, 'vae.json'))
+      self.rnn.load_json(os.path.join(full_model_path, 'rnn.json'))
+    elif load_model:
+      self.vae.load_json(os.path.join(vae_path, self.model_name + '_vae.json'))
+      self.rnn.load_json(os.path.join(rnn_path, self.model_name + '_rnn.json'))
 
     self.state = rnn_init_state(self.rnn)
     self.rnn_mode = True
@@ -139,9 +142,9 @@ class Model:
       self.weight = np.array(model_params[3:]).reshape(self.input_size, 3)
 
   def load_model(self, filename):
-    with open(filename) as f:    
+    with open(os.path.join(ROOT, 'log', filename)) as f:
       data = json.load(f)
-    print('loading file %s' % (filename))
+    print('loading file %s' % (os.path.join(ROOT, 'log', filename)))
     self.data = data
     model_params = np.array(data[0]) # assuming other stuff is in data
     self.set_model_params(model_params)
@@ -185,7 +188,7 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, seed=-1, 
 
     random_generated_int = np.random.randint(2**31-1)
 
-    filename = "record/"+str(random_generated_int)+".npz"
+    #filename = "record/"+str(random_generated_int)+".npz"
     recording_mu = []
     recording_logvar = []
     recording_action = []
