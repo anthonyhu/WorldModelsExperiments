@@ -258,11 +258,12 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_s
 
   return reward_list, bc_list, t_list
 
-def compute_novelty(bc_array, k=5):
+def compute_novelty(bc_array, archive, k=10):
   """
   Parameters
   ----------
     bc_array: np.array shape (population, bc_size)
+    archive: list of array shape (bc_size,)
     k: int
       number of nearest neighbours
 
@@ -273,7 +274,13 @@ def compute_novelty(bc_array, k=5):
   population = len(bc_array)
   fitness = np.zeros(population)
   neighbors = NearestNeighbors(k, metric='euclidean')
-  neighbors.fit(bc_array)
+
+  if archive:
+    training_set = np.concatenate([bc_array, np.array(archive)], axis=0)
+  else:
+    training_set = bc_array
+
+  neighbors.fit(training_set)
 
   for i in range(population):
     fitness[i] = neighbors.kneighbors(np.expand_dims(bc_array[i], 0))[0].mean()  # mean average distance to k-nearest neighbours

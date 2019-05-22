@@ -18,6 +18,9 @@ import os
 import json
 import subprocess
 import sys
+
+from collections import deque
+
 from model import make_model, simulate, compute_novelty
 from es import CMAES, SimpleGA, OpenES, PEPG
 import argparse
@@ -56,6 +59,10 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
 BC_SIZE = 256
+MAX_ARCHIVE_ELEMENTS = 500
+NOVELTY_THRESHOLD = 3
+PROBABILITY_ADD = 0.1
+N_NEAREST_NEIGHBOURS = 10
 ###
 
 def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
@@ -190,6 +197,7 @@ def decode_result_packet(packet):
   return result
 
 def worker(weights, seed, train_mode_int=1, max_len=-1):
+  behaviour_char = np.zeros(BC_SIZE)
 
   train_mode = (train_mode_int == 1)
   model.set_model_params(weights)
@@ -311,6 +319,9 @@ def master():
 
   max_len = -1 # max time steps (-1 means ignore)
 
+  # novelty search archive
+  archive = deque(maxlen=MAX_ARCHIVE_ELEMENTS)
+
   while True:
     t += 1
 
@@ -332,7 +343,15 @@ def master():
     # novelty search
     if novelty_search:
       # array of shape (population, bc_size) with bc_size the vector length of the behaviour vector
-      reward_list = compute_novelty(reward_list_total[:, 2:])
+      bc_array = reward_list_total[:, 2:]
+      reward_list = compute_novelty(bc_array, archive, N_NEAREST_NEIGHBOURS)
+
+      # update archive
+      for i, r in enumerate(reward_list):
+        if r > NOVELTY_THRESHOLD and np.random.random_sample() < PROBABILITY_ADD:
+          print('Adding an element to the archive with novelty {:.2f}'.format(r))
+          print('New length of archive: {}'.format(len(archive)))
+          archive.append(bc_array[i])
     else:
       reward_list = objective_reward_list
 
@@ -376,7 +395,7 @@ def master():
     sprint(gamename, h)
 
     if (t == 1):
-      best_reward_eval = avg_reward
+      best_reward_eval = avg_obj_reward
     if (t % eval_steps == 0): # evaluate on actual task at hand
 
       prev_best_reward_eval = best_reward_eval
