@@ -58,7 +58,8 @@ es = None
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
-BC_SIZE = 256
+H_SIZE = 256
+Z_SIZE = 32
 MAX_ARCHIVE_ELEMENTS = 500
 NOVELTY_THRESHOLD = 3
 PROBABILITY_ADD = 0.1
@@ -66,12 +67,21 @@ N_NEAREST_NEIGHBOURS = 25
 ###
 
 def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
-  global population, filebase, game, model, num_params, es, PRECISION, SOLUTION_PACKET_SIZE, RESULT_PACKET_SIZE, model_name, novelty_search, unique_id
+  global population, filebase, game, model, num_params, es, PRECISION, SOLUTION_PACKET_SIZE, RESULT_PACKET_SIZE, model_name, novelty_search, unique_id, novelty_mode, BC_SIZE
   population = num_worker * num_worker_trial
   os.makedirs(os.path.join(ROOT, 'log'), exist_ok=True)
   filebase = os.path.join(ROOT, 'log', gamename+'.'+optimizer+'.'+ model_name + '.' + str(num_episode)+'.'+str(population)) + '.' + unique_id
   if novelty_search:
     filebase = filebase + '.novelty'
+    if novelty_mode == 'h':
+      BC_SIZE = H_SIZE
+    elif novelty_mode == 'z':
+      BC_SIZE = Z_SIZE
+    elif novelty_mode =='h_concat':
+      BC_SIZE = 1000 * H_SIZE
+      NOVELTY_THRESHOLD = 180
+    else:
+      raise ValueError('Not recognised novelty_mode: {}'.format(novelty_mode))
 
   model = make_model(model_name, load_model=True)
   num_params = model.param_count
@@ -202,7 +212,7 @@ def worker(weights, seed, train_mode_int=1, max_len=-1):
   train_mode = (train_mode_int == 1)
   model.set_model_params(weights)
   reward_list, bc_list, t_list = simulate(model,
-    train_mode=train_mode, render_mode=False, num_episode=num_episode, novelty_search=novelty_search, seed=seed, max_len=max_len)
+    train_mode=train_mode, render_mode=False, num_episode=num_episode, novelty_search=novelty_search, novelty_mode=novelty_mode, seed=seed, max_len=max_len)
 
   if novelty_search:
     # bc_list shape (n_episodes, bc_size)
@@ -297,6 +307,8 @@ def master():
   sprint("population", es.popsize)
   sprint("num_worker", num_worker)
   sprint("num_worker_trial", num_worker_trial)
+  if novelty_search:
+    sprint('Novelty search with bc: {}'.format(novelty_mode))
   sys.stdout.flush()
 
   seeder = Seeder(seed_start)
@@ -426,7 +438,8 @@ def master():
 
 
 def main(args):
-  global optimizer, num_episode, eval_steps, num_worker, num_worker_trial, antithetic, seed_start, retrain_mode, cap_time_mode, model_name, novelty_search, unique_id
+  global optimizer, num_episode, eval_steps, num_worker, num_worker_trial, antithetic, seed_start, retrain_mode
+  global cap_time_mode, model_name, novelty_search, unique_id, novelty_mode
 
   optimizer = args.optimizer
   num_episode = args.num_episode
@@ -440,6 +453,7 @@ def main(args):
   model_name = args.name
   novelty_search = args.novelty_search
   unique_id = args.unique_id
+  novelty_mode = args.novelty_mode
 
   initialize_settings(args.sigma_init, args.sigma_decay)
 
@@ -491,6 +505,7 @@ if __name__ == "__main__":
   parser.add_argument('--name', type=str, required=True, help='model name')
   parser.add_argument('--novelty_search', default=False, action='store_true', help='novelty fitness')
   parser.add_argument('--unique_id', type=str, required=True)
+  parser.add_argument('--novelty_mode', type=str, default='', help='either h, z or h_concat')
 
   args = parser.parse_args()
   if "parent" == mpi_fork(args.num_worker+1): os.exit()

@@ -163,7 +163,7 @@ class Model:
     rnn_params = self.rnn.get_random_model_params(stdev=stdev)
     self.rnn.set_model_params(rnn_params)
 
-def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_search=False, seed=-1, max_len=-1):
+def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_search=False, novelty_mode='', seed=-1, max_len=-1):
 
   reward_list = []
   t_list = []
@@ -253,8 +253,12 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_s
     t_list.append(t)
     if novelty_search:
       # Mean h vector
-      bc_list.append(np.stack(recording_h, axis=0).mean(axis=0))
-
+      if novelty_mode == 'h':
+        bc_list.append(np.stack(recording_h, axis=0).mean(axis=0))  # shape 256
+      elif novelty_mode == 'z':
+        bc_list.append(np.stack(recording_mu, axis=0).mean(axis=0))  # shape 32
+      elif novelty_mode == 'h_concat':
+        bc_list.append(np.concatenate(recording_h, axis=0))  # shape 1000 * 256
 
   return reward_list, bc_list, t_list
 
