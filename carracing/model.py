@@ -5,6 +5,8 @@ import os
 import json
 import sys
 
+from sklearn.neighbors import NearestNeighbors
+
 from env import make_env
 import time
 
@@ -161,10 +163,11 @@ class Model:
     rnn_params = self.rnn.get_random_model_params(stdev=stdev)
     self.rnn.set_model_params(rnn_params)
 
-def simulate(model, train_mode=False, render_mode=True, num_episode=5, seed=-1, max_len=-1):
+def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_search=False, seed=-1, max_len=-1):
 
   reward_list = []
   t_list = []
+  bc_list = []
 
   max_episode_length = 1000
   recording_mode = False
@@ -190,6 +193,7 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, seed=-1, 
 
     #filename = "record/"+str(random_generated_int)+".npz"
     recording_mu = []
+    recording_h = []
     recording_logvar = []
     recording_action = []
     recording_reward = [0]
@@ -205,6 +209,8 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, seed=-1, 
       action = model.get_action(z)
 
       recording_mu.append(mu)
+      # here we append the next state h
+      recording_h.append(model.state.h[0])
       recording_logvar.append(logvar)
       recording_action.append(action)
 
@@ -245,8 +251,34 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, seed=-1, 
       print("total reward", total_reward, "timesteps", t)
     reward_list.append(total_reward)
     t_list.append(t)
+    if novelty_search:
+      # Mean h vector
+      bc_list.append(np.stack(recording_h, axis=0).mean(axis=0))
 
-  return reward_list, t_list
+
+  return reward_list, bc_list, t_list
+
+def compute_novelty(bc_array, k=5):
+  """
+  Parameters
+  ----------
+    bc_array: np.array shape (population, bc_size)
+    k: int
+      number of nearest neighbours
+
+  Returns
+  -------
+    fitness: np.array shape (population)
+  """
+  population = len(bc_array)
+  fitness = np.zeros(population)
+  neighbors = NearestNeighbors(k, metric='euclidean')
+  neighbors.fit(bc_array)
+
+  for i in range(population):
+    fitness[i] = neighbors.kneighbors(np.expand_dims(bc_array[i], 0))[0].mean()  # mean average distance to k-nearest neighbours
+
+  return fitness
 
 def main():
 

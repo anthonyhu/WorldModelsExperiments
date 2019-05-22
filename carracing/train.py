@@ -14,11 +14,11 @@ robo_humanoid
 
 from mpi4py import MPI
 import numpy as np
-import json
 import os
+import json
 import subprocess
 import sys
-from model import make_model, simulate
+from model import make_model, simulate, compute_novelty
 from es import CMAES, SimpleGA, OpenES, PEPG
 import argparse
 import time
@@ -55,19 +55,23 @@ es = None
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
-PRECISION = 10000
-SOLUTION_PACKET_SIZE = (5+num_params)*num_worker_trial
-RESULT_PACKET_SIZE = 4*num_worker_trial
+BC_SIZE = 256
 ###
 
 def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
-  global population, filebase, game, model, num_params, es, PRECISION, SOLUTION_PACKET_SIZE, RESULT_PACKET_SIZE, model_name
+  global population, filebase, game, model, num_params, es, PRECISION, SOLUTION_PACKET_SIZE, RESULT_PACKET_SIZE, model_name, novelty_search, unique_id
   population = num_worker * num_worker_trial
   os.makedirs(os.path.join(ROOT, 'log'), exist_ok=True)
-  filebase = os.path.join(ROOT, 'log', gamename+'.'+optimizer+'.'+ model_name + '.' + str(num_episode)+'.'+str(population))
+  filebase = os.path.join(ROOT, 'log', gamename+'.'+optimizer+'.'+ model_name + '.' + str(num_episode)+'.'+str(population)) + '.' + unique_id
+  if novelty_search:
+    filebase = filebase + '.novelty'
+
   model = make_model(model_name, load_model=True)
   num_params = model.param_count
   print("size of model", num_params)
+  PRECISION = 10000
+  SOLUTION_PACKET_SIZE = (5 + num_params) * num_worker_trial
+  RESULT_PACKET_SIZE = (4 + BC_SIZE) * num_worker_trial
 
   if optimizer == 'ses':
     ses = PEPG(num_params,
@@ -117,10 +121,6 @@ def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
       weight_decay=0.005,
       popsize=population)
     es = oes
-
-  PRECISION = 10000
-  SOLUTION_PACKET_SIZE = (5+num_params)*num_worker_trial
-  RESULT_PACKET_SIZE = 4*num_worker_trial
 ###
 
 def sprint(*args):
@@ -171,42 +171,47 @@ def decode_solution_packet(packet):
 
 def encode_result_packet(results):
   r = np.array(results)
-  r[:, 2:4] *= PRECISION
+  r[:, 2:] *= PRECISION
   return r.flatten().astype(np.int32)
 
 def decode_result_packet(packet):
-  r = packet.reshape(num_worker_trial, 4)
+  r = packet.reshape(num_worker_trial, 4 + BC_SIZE)
   workers = r[:, 0].tolist()
   jobs = r[:, 1].tolist()
-  fits = r[:, 2].astype(np.float)/PRECISION
-  fits = fits.tolist()
-  times = r[:, 3].astype(np.float)/PRECISION
+  times = r[:, 2].astype(np.float)/PRECISION
   times = times.tolist()
+  fits = r[:, 3].astype(np.float)/PRECISION
+  fits = fits.tolist()
+  behaviour_chars = r[:, 4:].astype(np.float)/PRECISION
   result = []
   n = len(jobs)
   for i in range(n):
-    result.append([workers[i], jobs[i], fits[i], times[i]])
+    result.append([workers[i], jobs[i], times[i], fits[i], behaviour_chars[i]])
   return result
 
 def worker(weights, seed, train_mode_int=1, max_len=-1):
 
   train_mode = (train_mode_int == 1)
   model.set_model_params(weights)
-  reward_list, t_list = simulate(model,
-    train_mode=train_mode, render_mode=False, num_episode=num_episode, seed=seed, max_len=max_len)
+  reward_list, bc_list, t_list = simulate(model,
+    train_mode=train_mode, render_mode=False, num_episode=num_episode, novelty_search=novelty_search, seed=seed, max_len=max_len)
+
+  if novelty_search:
+    # bc_list shape (n_episodes, bc_size)
+    behaviour_char = np.array(bc_list).mean(axis=0)
   if batch_mode == 'min':
     reward = np.min(reward_list)
   else:
     reward = np.mean(reward_list)
   t = np.mean(t_list)
-  return reward, t
+  return reward, behaviour_char, t  # bc_list shape (bc_size,)
 
 def slave():
   model.make_env()
   packet = np.empty(SOLUTION_PACKET_SIZE, dtype=np.int32)
   while 1:
     comm.Recv(packet, source=0)
-    assert(len(packet) == SOLUTION_PACKET_SIZE)
+    assert len(packet) == SOLUTION_PACKET_SIZE, 'packet size: {}, expected {}'.format(len(packet), SOLUTION_PACKET_SIZE)
     solutions = decode_solution_packet(packet)
     results = []
     for solution in solutions:
@@ -217,8 +222,8 @@ def slave():
       assert worker_id == rank, possible_error
       jobidx = int(jobidx)
       seed = int(seed)
-      fitness, timesteps = worker(weights, seed, train_mode, max_len)
-      results.append([worker_id, jobidx, fitness, timesteps])
+      fitness, behaviour_char, timesteps = worker(weights, seed, train_mode, max_len)
+      results.append(np.concatenate([[worker_id, jobidx, timesteps, fitness], behaviour_char]))
     result_packet = encode_result_packet(results)
     assert len(result_packet) == RESULT_PACKET_SIZE
     comm.Send(result_packet, dest=0)
@@ -228,13 +233,20 @@ def send_packets_to_slaves(packet_list):
   assert len(packet_list) == num_worker-1
   for i in range(1, num_worker):
     packet = packet_list[i-1]
-    assert(len(packet) == SOLUTION_PACKET_SIZE)
+    assert len(packet) == SOLUTION_PACKET_SIZE, 'packet size: {}, expected {}'.format(len(packet), SOLUTION_PACKET_SIZE)
     comm.Send(packet, dest=i)
 
 def receive_packets_from_slaves():
+  """
+  Returns
+  -------
+    reward_list_total: np.array (population, 2 + bc_size)
+    columns: first index is the timetamp, then reward, and the remaining ones are the bc vector
+
+  """
   result_packet = np.empty(RESULT_PACKET_SIZE, dtype=np.int32)
 
-  reward_list_total = np.zeros((population, 2))
+  reward_list_total = np.zeros((population, 2 + BC_SIZE))
 
   check_results = np.ones(population, dtype=np.int)
   for i in range(1, num_worker+1):
@@ -247,6 +259,7 @@ def receive_packets_from_slaves():
       idx = int(result[1])
       reward_list_total[idx, 0] = result[2]
       reward_list_total[idx, 1] = result[3]
+      reward_list_total[idx, 2:] = result[4]
       check_results[idx] = 0
 
   check_sum = check_results.sum()
@@ -266,7 +279,7 @@ def evaluate_batch(model_params, max_len=-1):
   send_packets_to_slaves(packet_list)
   reward_list_total = receive_packets_from_slaves()
 
-  reward_list = reward_list_total[:, 0] # get rewards
+  reward_list = reward_list_total[:, 1]
   return np.mean(reward_list)
 
 def master():
@@ -314,10 +327,19 @@ def master():
     send_packets_to_slaves(packet_list)
     reward_list_total = receive_packets_from_slaves()
 
-    reward_list = reward_list_total[:, 0] # get rewards
+    objective_reward_list = reward_list_total[:, 1] # get rewards shape (population,)
+    ########
+    # novelty search
+    if novelty_search:
+      # array of shape (population, bc_size) with bc_size the vector length of the behaviour vector
+      reward_list = compute_novelty(reward_list_total[:, 2:])
+    else:
+      reward_list = objective_reward_list
 
-    mean_time_step = int(np.mean(reward_list_total[:, 1])*100)/100. # get average time step
-    max_time_step = int(np.max(reward_list_total[:, 1])*100)/100. # get average time step
+    avg_obj_reward = int(np.mean(objective_reward_list)*100)/100.
+
+    mean_time_step = int(np.mean(reward_list_total[:, 0])*100)/100. # get average time step
+    max_time_step = int(np.max(reward_list_total[:, 0])*100)/100. # get average time step
     avg_reward = int(np.mean(reward_list)*100)/100. # get average time step
     std_reward = int(np.std(reward_list)*100)/100. # get average time step
 
@@ -334,7 +356,7 @@ def master():
 
     curr_time = int(time.time()) - start_time
 
-    h = (t, curr_time, avg_reward, r_min, r_max, std_reward, int(es.rms_stdev()*100000)/100000., mean_time_step+1., int(max_time_step)+1)
+    h = (t, curr_time, avg_reward, r_min, r_max, std_reward, int(es.rms_stdev()*100000)/100000., mean_time_step+1., int(max_time_step)+1, avg_obj_reward)
 
     if cap_time_mode:
       max_len = 2*int(mean_time_step+1.0)
@@ -343,12 +365,14 @@ def master():
 
     history.append(h)
 
+    print('Saving history, generation {}'.format(t))
     with open(filename, 'wt') as out:
       res = json.dump([np.array(es.current_param()).round(4).tolist()], out, sort_keys=True, indent=2, separators=(',', ': '))
 
     with open(filename_hist, 'wt') as out:
       res = json.dump(history, out, sort_keys=False, indent=0, separators=(',', ':'))
 
+    sprint('timestep, curr_time, avg_r, r_min, r_max, std_r, .., avg_obj_r')
     sprint(gamename, h)
 
     if (t == 1):
@@ -383,7 +407,7 @@ def master():
 
 
 def main(args):
-  global optimizer, num_episode, eval_steps, num_worker, num_worker_trial, antithetic, seed_start, retrain_mode, cap_time_mode, model_name
+  global optimizer, num_episode, eval_steps, num_worker, num_worker_trial, antithetic, seed_start, retrain_mode, cap_time_mode, model_name, novelty_search, unique_id
 
   optimizer = args.optimizer
   num_episode = args.num_episode
@@ -395,6 +419,8 @@ def main(args):
   cap_time_mode= (args.cap_time == 1)
   seed_start = args.seed_start
   model_name = args.name
+  novelty_search = args.novelty_search
+  unique_id = args.unique_id
 
   initialize_settings(args.sigma_init, args.sigma_decay)
 
@@ -431,7 +457,7 @@ def mpi_fork(n):
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description=('Train policy on OpenAI Gym environment '
                                                 'using pepg, ses, openes, ga, cma'))
-  
+
   parser.add_argument('-o', '--optimizer', type=str, help='ses, pepg, openes, ga, cma.', default='cma')
   parser.add_argument('--num_episode', type=int, default=16, help='num episodes per trial')  # was 16
   parser.add_argument('--eval_steps', type=int, default=5, help='evaluate every eval_steps step')  # was 25, each eval correspond to each worker doing num_episodes
@@ -444,6 +470,8 @@ if __name__ == "__main__":
   parser.add_argument('--sigma_init', type=float, default=0.1, help='sigma_init')
   parser.add_argument('--sigma_decay', type=float, default=0.999, help='sigma_decay')
   parser.add_argument('--name', type=str, required=True, help='model name')
+  parser.add_argument('--novelty_search', default=False, action='store_true', help='novelty fitness')
+  parser.add_argument('--unique_id', type=str, required=True)
 
   args = parser.parse_args()
   if "parent" == mpi_fork(args.num_worker+1): os.exit()
