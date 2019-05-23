@@ -254,11 +254,22 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_s
     if novelty_search:
       # Mean h vector
       if novelty_mode == 'h':
-        bc_list.append(np.stack(recording_h, axis=0).mean(axis=0))  # shape 256
+        bc_array = np.stack(recording_h, axis=0).mean(axis=0)  # shape 256
       elif novelty_mode == 'z':
-        bc_list.append(np.stack(recording_mu, axis=0).mean(axis=0))  # shape 32
+        bc_array = np.stack(recording_mu, axis=0).mean(axis=0)  # shape 32
       elif novelty_mode == 'h_concat':
-        bc_list.append(np.concatenate(recording_h, axis=0))  # shape 1000 * 256
+        if len(recording_h) < max_episode_length:
+          recording_h = recording_h + [recording_h[-1]] * (max_episode_length - len(recording_h))
+        bc_array = np.concatenate(recording_h, axis=0)  # shape 1000 * 256
+        # if the array is smaller repeat last element
+      elif novelty_mode == 'z_concat':
+        if len(recording_mu) < max_episode_length:
+          recording_mu = recording_mu + [recording_mu[-1]] * (max_episode_length - len(recording_mu))
+        bc_array = np.concatenate(recording_mu, axis=0)  # shape 1000 * 256
+        # if the array is smaller repeat last element
+
+      bc_list.append(bc_array)
+
 
   return reward_list, bc_list, t_list
 
@@ -277,12 +288,16 @@ def compute_novelty(bc_array, archive, k=10):
   """
   population = len(bc_array)
   fitness = np.zeros(population)
-  neighbors = NearestNeighbors(k, metric='euclidean')
 
   if archive:
     training_set = np.concatenate([bc_array, np.array(archive)], axis=0)
   else:
     training_set = bc_array
+
+  if len(training_set) < k:
+    print('Only {} examples for the nearest neighbours algorithm'.format(len(training_set)))
+    k = len(training_set)
+  neighbors = NearestNeighbors(k, metric='euclidean')
 
   neighbors.fit(training_set)
 

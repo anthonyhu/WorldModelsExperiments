@@ -61,9 +61,9 @@ rank = comm.Get_rank()
 H_SIZE = 256
 Z_SIZE = 32
 MAX_ARCHIVE_ELEMENTS = 500
-NOVELTY_THRESHOLD = 3
-PROBABILITY_ADD = 0.1
-N_NEAREST_NEIGHBOURS = 25
+NOVELTY_THRESHOLD = 0
+PROBABILITY_ADD = 0.02
+N_NEAREST_NEIGHBOURS = 10
 ###
 
 def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
@@ -79,7 +79,9 @@ def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
       BC_SIZE = Z_SIZE
     elif novelty_mode =='h_concat':
       BC_SIZE = 1000 * H_SIZE
-      NOVELTY_THRESHOLD = 180
+      #NOVELTY_THRESHOLD = 180
+    elif novelty_mode == 'z_concat':
+      BC_SIZE = 1000 * Z_SIZE
     else:
       raise ValueError('Not recognised novelty_mode: {}'.format(novelty_mode))
 
@@ -188,6 +190,7 @@ def decode_solution_packet(packet):
 
 def encode_result_packet(results):
   r = np.array(results)
+  print('encode_results_packets receives array of shape {}'.format(r.shape))
   r[:, 2:] *= PRECISION
   return r.flatten().astype(np.int32)
 
@@ -242,6 +245,7 @@ def slave():
       seed = int(seed)
       fitness, behaviour_char, timesteps = worker(weights, seed, train_mode, max_len)
       results.append(np.concatenate([[worker_id, jobidx, timesteps, fitness], behaviour_char]))
+    print('results after worker of len {} and element of shape {}'.format(len(results), results[0].shape))
     result_packet = encode_result_packet(results)
     assert len(result_packet) == RESULT_PACKET_SIZE
     comm.Send(result_packet, dest=0)
