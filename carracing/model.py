@@ -231,21 +231,21 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_s
       if done:
         break
 
-    #for recording:
-    z, mu, logvar = model.encode_obs(obs)
-    action = model.get_action(z)
-    recording_mu.append(mu)
-    recording_logvar.append(logvar)
-    recording_action.append(action)
-
-    recording_mu = np.array(recording_mu, dtype=np.float16)
-    recording_logvar = np.array(recording_logvar, dtype=np.float16)
-    recording_action = np.array(recording_action, dtype=np.float16)
-    recording_reward = np.array(recording_reward, dtype=np.float16)
-
-    if not render_mode:
-      if recording_mode:
-        np.savez_compressed(filename, mu=recording_mu, logvar=recording_logvar, action=recording_action, reward=recording_reward)
+    # #for recording:
+    # z, mu, logvar = model.encode_obs(obs)
+    # action = model.get_action(z)
+    # recording_mu.append(mu)
+    # recording_logvar.append(logvar)
+    # recording_action.append(action)
+    #
+    # recording_mu = np.array(recording_mu, dtype=np.float16)
+    # recording_logvar = np.array(recording_logvar, dtype=np.float16)
+    # recording_action = np.array(recording_action, dtype=np.float16)
+    # recording_reward = np.array(recording_reward, dtype=np.float16)
+    #
+    # if not render_mode:
+    #   if recording_mode:
+    #     np.savez_compressed(filename, mu=recording_mu, logvar=recording_logvar, action=recording_action, reward=recording_reward)
 
     if render_mode:
       print("total reward", total_reward, "timesteps", t)
@@ -265,7 +265,7 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_s
       elif novelty_mode == 'z_concat':
         if len(recording_mu) < max_episode_length:
           recording_mu = recording_mu + [recording_mu[-1]] * (max_episode_length - len(recording_mu))
-        bc_array = np.concatenate(recording_mu, axis=0)  # shape 1000 * 256
+        bc_array = np.concatenate(recording_mu, axis=0)  # shape 1000 * 32
         # if the array is smaller repeat last element
 
       bc_list.append(bc_array)
