@@ -75,17 +75,17 @@ def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
   filebase = os.path.join(ROOT, 'log', gamename+'.'+optimizer+'.'+ model_name + '.' + str(num_episode)+'.'+str(population)) + '.' + unique_id
   if novelty_search:
     filebase = filebase + '.novelty'
-    if novelty_mode == 'h':
-      BC_SIZE = H_SIZE
-    elif novelty_mode == 'z':
-      BC_SIZE = Z_SIZE
-    elif novelty_mode =='h_concat':
-      BC_SIZE = 1000 * H_SIZE
-      #NOVELTY_THRESHOLD = 180
-    elif novelty_mode == 'z_concat':
-      BC_SIZE = 1000 * Z_SIZE
-    else:
-      raise ValueError('Not recognised novelty_mode: {}'.format(novelty_mode))
+  if novelty_mode == 'h':
+    BC_SIZE = H_SIZE
+  elif novelty_mode == 'z':
+    BC_SIZE = Z_SIZE
+  elif novelty_mode =='h_concat':
+    BC_SIZE = 1000 * H_SIZE
+    #NOVELTY_THRESHOLD = 180
+  elif novelty_mode == 'z_concat':
+    BC_SIZE = 1000 * Z_SIZE
+  else:
+    raise ValueError('Not recognised novelty_mode: {}'.format(novelty_mode))
 
   model = make_model(model_name, load_model=True)
   num_params = model.param_count
