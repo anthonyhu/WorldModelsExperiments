@@ -10,18 +10,10 @@ from scipy.misc import toimage as toimage
 from gym.spaces.box import Box
 from gym.utils import seeding
 
-ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
-initial_z_filename = os.path.join(ROOT, 'tf_initial_z', 'initial_z_vae_beta_5.0.json')
-
 SCREEN_X = 64
 SCREEN_Y = 64
 FACTOR = 8
 
-with open(initial_z_filename, 'r') as f:
-  [initial_mu, initial_logvar] = json.load(f)
-
-initial_mu_logvar = [list(elem) for elem in zip(initial_mu, initial_logvar)]
 
 def get_pi_idx(x, pdf):
   # samples from a categorial distribution
@@ -40,7 +32,7 @@ class CarRacingDream(gym.Env):
       'video.frames_per_second' : 60
   }
 
-  def __init__(self, agent):
+  def __init__(self, agent, initial_z_filename):
     self.observation_space = Box(low=-50., high=50., shape=(32)) # , dtype=np.float32
     self._seed()
     self.agent = agent
@@ -52,6 +44,7 @@ class CarRacingDream(gym.Env):
     self.z = None
     self.temperature = 0.7
     self.vae_frame = None
+    self.initial_z_filename = initial_z_filename
     self._reset()
 
   def _seed(self, seed=None):
@@ -63,6 +56,10 @@ class CarRacingDream(gym.Env):
     return z
 
   def _reset(self):
+    with open(self.initial_z_filename, 'r') as f:
+      [initial_mu, initial_logvar] = json.load(f)
+
+    initial_mu_logvar = [list(elem) for elem in zip(initial_mu, initial_logvar)]
     idx = self.np_random.randint(0, len(initial_mu_logvar))
     init_mu, init_logvar = initial_mu_logvar[idx]
     init_mu = np.array(init_mu)/10000.
@@ -153,8 +150,8 @@ class CarRacingDream(gym.Env):
         self.viewer = rendering.SimpleImageViewer()
       self.viewer.imshow(img)
 
-def make_env(env_name, agent, seed=-1, render_mode=False):
-  env = CarRacingDream(agent)
+def make_env(env_name, agent, seed=-1, render_mode=False, initial_z_filename=''):
+  env = CarRacingDream(agent, initial_z_filename)
   if seed <0:
     seed = np.random.randint(2**31-1)
   env.seed(seed)

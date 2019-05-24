@@ -21,7 +21,7 @@ import sys
 
 from collections import deque
 
-from model import make_model, simulate, compute_novelty
+from model import make_model, simulate, compute_novelty, score_to_rank_transform
 from es import CMAES, SimpleGA, OpenES, PEPG
 import argparse
 import time
@@ -60,16 +60,22 @@ rank = comm.Get_rank()
 
 H_SIZE = 256
 Z_SIZE = 32
+A_SIZE = 3
+BC_SEQ_LENGTH = 100
 MAX_ARCHIVE_ELEMENTS = 500
-NOVELTY_THRESHOLD = 0
-PROBABILITY_ADD = 0.02
+PROBABILITY_ADD = 0.1
 N_NEAREST_NEIGHBOURS = 10
 FIXED_MAP = True
 FIXED_SEED = 30
+
+INITIAL_W = 1.0
+TUNE_FREQ_W = 10
+DELTA_W = 0.1
+
 ###
 
 def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
-  global population, filebase, game, model, num_params, es, PRECISION, SOLUTION_PACKET_SIZE, RESULT_PACKET_SIZE, model_name, novelty_search, unique_id, novelty_mode, BC_SIZE
+  global population, filebase, game, model, num_params, es, PRECISION, SOLUTION_PACKET_SIZE, RESULT_PACKET_SIZE, model_name, novelty_search, unique_id, novelty_mode, BC_SIZE, ns_mode
   population = num_worker * num_worker_trial
   os.makedirs(os.path.join(ROOT, 'log'), exist_ok=True)
   filebase = os.path.join(ROOT, 'log', gamename+'.'+optimizer+'.'+ model_name + '.' + str(num_episode)+'.'+str(population)) + '.' + unique_id
@@ -80,12 +86,20 @@ def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
   elif novelty_mode == 'z':
     BC_SIZE = Z_SIZE
   elif novelty_mode =='h_concat':
-    BC_SIZE = 1000 * H_SIZE
+    BC_SIZE = BC_SEQ_LENGTH * H_SIZE
     #NOVELTY_THRESHOLD = 180
   elif novelty_mode == 'z_concat':
-    BC_SIZE = 1000 * Z_SIZE
+    BC_SIZE = BC_SEQ_LENGTH * Z_SIZE
+  elif novelty_mode == 'a_concat':
+    BC_SIZE = BC_SEQ_LENGTH * A_SIZE
   else:
     raise ValueError('Not recognised novelty_mode: {}'.format(novelty_mode))
+
+  if novelty_mode:
+    filebase = filebase + '.' + novelty_mode
+
+  if ns_mode:
+    filebase = filebase + '.' + ns_mode
 
   model = make_model(model_name, load_model=True)
   num_params = model.param_count
@@ -216,8 +230,9 @@ def worker(weights, seed, train_mode_int=1, max_len=-1):
 
   train_mode = (train_mode_int == 1)
   model.set_model_params(weights)
-  reward_list, bc_list, t_list = simulate(model,
-    train_mode=train_mode, render_mode=False, num_episode=num_episode, novelty_search=novelty_search, novelty_mode=novelty_mode, seed=seed, max_len=max_len)
+  reward_list, bc_list, t_list = simulate(model, train_mode=train_mode, render_mode=False, num_episode=num_episode,
+                                          novelty_search=novelty_search, novelty_mode=novelty_mode, seq_len=BC_SEQ_LENGTH,
+                                          seed=seed, max_len=max_len)
 
   if novelty_search:
     # bc_list shape (n_episodes, bc_size)
@@ -342,6 +357,11 @@ def master():
   # novelty search archive
   archive = deque(maxlen=MAX_ARCHIVE_ELEMENTS)
 
+  # Init parameters for NSRA
+  if ns_mode == 'NSRA':
+    w = INITIAL_W
+    t_best = 0
+
   while True:
     t += 1
 
@@ -361,31 +381,53 @@ def master():
     send_packets_to_slaves(packet_list)
     reward_list_total = receive_packets_from_slaves()
 
-    objective_reward_list = reward_list_total[:, 1] # get rewards shape (population,)
+    reward_list = reward_list_total[:, 1] # get rewards shape (population,)
     ########
     # novelty search
     if novelty_search:
       # array of shape (population, bc_size) with bc_size the vector length of the behaviour vector
       bc_array = reward_list_total[:, 2:]
-      reward_list = compute_novelty(bc_array, archive, N_NEAREST_NEIGHBOURS)
+      novelty_rank_transformed = compute_novelty(bc_array, archive, N_NEAREST_NEIGHBOURS)
 
       # update archive
-      for i, r in enumerate(reward_list):
-        if r > NOVELTY_THRESHOLD and np.random.random_sample() < PROBABILITY_ADD:
+      for i, r in enumerate(novelty_rank_transformed):
+        if np.random.random_sample() < PROBABILITY_ADD:
           print('Adding an element to the archive with novelty {:.2f}'.format(r))
           print('New length of archive: {}'.format(len(archive)))
           archive.append(bc_array[i])
-    else:
-      reward_list = objective_reward_list
 
-    avg_obj_reward = int(np.mean(objective_reward_list)*100)/100.
+      if ns_mode == 'NSR':
+        reward_rank_transformed = score_to_rank_transform(reward_list)
+        score_list = (reward_rank_transformed + novelty_rank_transformed) / 2
+      elif ns_mode == 'NSRA':
+        if t > 1:
+          # Supposes that EVAL_STEP is set to 1
+          if improvement > 0:
+            w = min(1, w + DELTA_W)
+            t_best = 0
+          else:
+            t_best += 1
+
+          if t_best >= TUNE_FREQ_W:
+            w = max(0, w - DELTA_W)
+            t_best = 0
+
+        reward_rank_transformed = score_to_rank_transform(reward_list)
+        score_list = (1 - w) * novelty_rank_transformed + w * reward_rank_transformed
+      else:
+        score_list = novelty_rank_transformed
+
+    else:
+      score_list = reward_list
+
+    avg_score = int(np.mean(score_list)*100)/100.
 
     mean_time_step = int(np.mean(reward_list_total[:, 0])*100)/100. # get average time step
     max_time_step = int(np.max(reward_list_total[:, 0])*100)/100. # get average time step
     avg_reward = int(np.mean(reward_list)*100)/100. # get average time step
     std_reward = int(np.std(reward_list)*100)/100. # get average time step
 
-    es.tell(reward_list)
+    es.tell(score_list)
 
     es_solution = es.result()
     model_params = es_solution[0] # best historical solution
@@ -398,7 +440,7 @@ def master():
 
     curr_time = int(time.time()) - start_time
 
-    h = (t, curr_time, avg_reward, r_min, r_max, std_reward, int(es.rms_stdev()*100000)/100000., mean_time_step+1., int(max_time_step)+1, avg_obj_reward)
+    h = (t, curr_time, avg_reward, r_min, r_max, std_reward, int(es.rms_stdev()*100000)/100000., mean_time_step+1., int(max_time_step)+1, avg_score)
 
     if cap_time_mode:
       max_len = 2*int(mean_time_step+1.0)
@@ -418,7 +460,7 @@ def master():
     sprint(gamename, h)
 
     if (t == 1):
-      best_reward_eval = avg_obj_reward
+      best_reward_eval = avg_reward
     if (t % eval_steps == 0): # evaluate on actual task at hand
 
       prev_best_reward_eval = best_reward_eval
@@ -450,7 +492,7 @@ def master():
 
 def main(args):
   global optimizer, num_episode, eval_steps, num_worker, num_worker_trial, antithetic, seed_start, retrain_mode
-  global cap_time_mode, model_name, novelty_search, unique_id, novelty_mode
+  global cap_time_mode, model_name, novelty_search, unique_id, novelty_mode, ns_mode
 
   optimizer = args.optimizer
   num_episode = args.num_episode
@@ -465,6 +507,7 @@ def main(args):
   novelty_search = args.novelty_search
   unique_id = args.unique_id
   novelty_mode = args.novelty_mode
+  ns_mode = args.ns_mode
 
   initialize_settings(args.sigma_init, args.sigma_decay)
 
@@ -503,8 +546,8 @@ if __name__ == "__main__":
                                                 'using pepg, ses, openes, ga, cma'))
 
   parser.add_argument('-o', '--optimizer', type=str, help='ses, pepg, openes, ga, cma.', default='cma')
-  parser.add_argument('--num_episode', type=int, default=16, help='num episodes per trial')  # was 16
-  parser.add_argument('--eval_steps', type=int, default=5, help='evaluate every eval_steps step')  # was 25, each eval correspond to each worker doing num_episodes
+  parser.add_argument('--num_episode', type=int, default=1, help='num episodes per trial')  # was 16
+  parser.add_argument('--eval_steps', type=int, default=1, help='evaluate every eval_steps step')  # was 25, each eval correspond to each worker doing num_episodes
   parser.add_argument('-n', '--num_worker', type=int, default=12)  # was 64
   parser.add_argument('-t', '--num_worker_trial', type=int, help='trials per worker', default=1)  # was 1
   parser.add_argument('--antithetic', type=int, default=1, help='set to 0 to disable antithetic sampling')
@@ -517,6 +560,7 @@ if __name__ == "__main__":
   parser.add_argument('--novelty_search', default=False, action='store_true', help='novelty fitness')
   parser.add_argument('--unique_id', type=str, required=True)
   parser.add_argument('--novelty_mode', type=str, default='', help='either h, z or h_concat')
+  parser.add_argument('--ns_mode', type=str, default='', help='either NS, NSR or NSRA') # NSRA supposes that eval_step is set to 1
 
   args = parser.parse_args()
   if "parent" == mpi_fork(args.num_worker+1): os.exit()

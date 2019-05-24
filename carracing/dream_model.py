@@ -13,11 +13,18 @@ import time
 from vae.vae import ConvVAE
 from rnn.rnn import hps_sample, MDNRNN, rnn_init_state, rnn_next_state, rnn_output, rnn_output_size
 
-# TODO: not valid pathnames
+MODEL_NAME = 'beta5_rtd'
+
+#ROOT = ''
 ROOT = '/data/cvfs/ah2029/datasets/gym/carracing/'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
-vae_path = os.path.join(ROOT, 'tf_vae')
-rnn_path = os.path.join(ROOT, 'tf_rnn')
+#vae_filename = os.path.join(ROOT, 'vae', 'vae.json)
+#rnn_filename = os.path.join(ROOT, 'rnn', 'rnn.json)
+#initial_z_filename = os.path.join(ROOT, 'initial_z', 'initial_z.json')
+vae_filename = os.path.join(ROOT, 'tf_vae', MODEL_NAME + '_vae.json')
+rnn_filename = os.path.join(ROOT, 'tf_rnn', MODEL_NAME + '_rnn.json')
+initial_z_filename = os.path.join(ROOT, 'tf_initial_z', MODEL_NAME + '_initial_z.json')
+
 
 render_mode = True
 
@@ -88,7 +95,7 @@ class Model:
 
   def make_env(self, seed=-1, render_mode=False):
     self.render_mode = render_mode
-    self.env = make_env(self.env_name, agent=self, seed=seed)
+    self.env = make_env(self.env_name, agent=self, seed=seed, initial_z_filename=initial_z_filename)
 
   def reset(self):
     self.state = rnn_init_state(self.rnn)

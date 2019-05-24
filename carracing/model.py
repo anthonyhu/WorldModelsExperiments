@@ -163,7 +163,7 @@ class Model:
     rnn_params = self.rnn.get_random_model_params(stdev=stdev)
     self.rnn.set_model_params(rnn_params)
 
-def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_search=False, novelty_mode='', seed=-1, max_len=-1):
+def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_search=False, novelty_mode='', seq_len=1000, seed=-1, max_len=-1):
 
   reward_list = []
   t_list = []
@@ -257,21 +257,58 @@ def simulate(model, train_mode=False, render_mode=True, num_episode=5, novelty_s
         bc_array = np.stack(recording_h, axis=0).mean(axis=0)  # shape 256
       elif novelty_mode == 'z':
         bc_array = np.stack(recording_mu, axis=0).mean(axis=0)  # shape 32
-      elif novelty_mode == 'h_concat':
-        if len(recording_h) < max_episode_length:
-          recording_h = recording_h + [recording_h[-1]] * (max_episode_length - len(recording_h))
-        bc_array = np.concatenate(recording_h, axis=0)  # shape 1000 * 256
+
+      if novelty_mode in ['h_concat', 'z_concat', 'a_concat']:
+        if novelty_mode == 'h_concat':
+          recording_bc = recording_h
+        elif novelty_mode == 'z_concat':
+          recording_bc = recording_mu
+        elif novelty_mode == 'a_concat':
+          recording_bc = recording_action
+
         # if the array is smaller repeat last element
-      elif novelty_mode == 'z_concat':
-        if len(recording_mu) < max_episode_length:
-          recording_mu = recording_mu + [recording_mu[-1]] * (max_episode_length - len(recording_mu))
-        bc_array = np.concatenate(recording_mu, axis=0)  # shape 1000 * 32
-        # if the array is smaller repeat last element
+        if len(recording_bc) < max_episode_length:
+          recording_bc = recording_bc + [recording_bc[-1]] * (max_episode_length - len(recording_bc))
+
+        if seq_len < max_episode_length:
+          assert max_episode_length % seq_len == 0, 'Max episode length is not divisible by seq_len'
+          step = max_episode_length // seq_len
+          recording_bc = recording_bc[::step]
+        bc_array = np.concatenate(recording_bc, axis=0)  # shape seq_len * d
 
       bc_list.append(bc_array)
 
 
   return reward_list, bc_list, t_list
+
+
+def rank(scores):
+    """
+    Parameters
+    ----------
+        scores: 1D np.array
+
+    Returns
+    -------
+        ranks: 1D np.array
+            from 1 (highest value) to len(scores) (lowest value)
+    """
+    order = np.argsort(-scores)
+    ranks = np.zeros_like(scores)
+    ranks[order] = np.arange(len(scores)) + 1
+    return ranks
+
+
+def rank_transform(k, n):
+  """ Rank transform, as defined in http://www.jmlr.org/papers/volume15/wierstra14a/wierstra14a.pdf"""
+  denom = np.sum(np.maximum(0, np.log(n / 2 + 1) - np.log(np.arange(1, n + 1))))
+  return max(0, np.log(n / 2 + 1) - np.log(k)) / denom - 1 / n
+
+
+def score_to_rank_transform(scores):
+  ranks = rank(scores)
+  return np.array([rank_transform(k, len(ranks)) for k in ranks])
+
 
 def compute_novelty(bc_array, archive, k=10):
   """
@@ -285,6 +322,7 @@ def compute_novelty(bc_array, archive, k=10):
   Returns
   -------
     fitness: np.array shape (population)
+      novelty rank transformed
   """
   population = len(bc_array)
   fitness = np.zeros(population)
@@ -304,6 +342,8 @@ def compute_novelty(bc_array, archive, k=10):
   for i in range(population):
     fitness[i] = neighbors.kneighbors(np.expand_dims(bc_array[i], 0))[0].mean()  # mean average distance to k-nearest neighbours
 
+  # Rank transform
+  fitness = score_to_rank_transform(fitness)
   return fitness
 
 def main():
