@@ -7,6 +7,10 @@ import config
 from env import make_env
 import time
 
+import os
+
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
 final_mode = True
 render_mode = True
 RENDER_DELAY = False

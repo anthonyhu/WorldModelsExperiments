@@ -64,6 +64,8 @@ MAX_ARCHIVE_ELEMENTS = 500
 NOVELTY_THRESHOLD = 0
 PROBABILITY_ADD = 0.02
 N_NEAREST_NEIGHBOURS = 10
+FIXED_MAP = True
+FIXED_SEED = 30
 ###
 
 def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
@@ -295,6 +297,8 @@ def evaluate_batch(model_params, max_len=-1):
     solutions.append(np.copy(model_params))
 
   seeds = np.arange(es.popsize)
+  if FIXED_SEED:
+    seeds = [FIXED_SEED] * es.popsize
 
   packet_list = encode_solution_packets(seeds, solutions, train_mode=0, max_len=max_len)
 
@@ -348,6 +352,9 @@ def master():
       seeds = seeds+seeds
     else:
       seeds = seeder.next_batch(es.popsize)
+
+    if FIXED_MAP:
+      seeds = [FIXED_SEED] * es.popsize
 
     packet_list = encode_solution_packets(seeds, solutions, max_len=max_len)
 
