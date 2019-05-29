@@ -95,7 +95,6 @@ rnn = MDNRNN(hps_model)
 hps = hps_model
 start = time.time()
 for local_step in range(hps.num_steps):
-
   step = rnn.sess.run(rnn.global_step)
   curr_learning_rate = (hps.learning_rate-hps.min_learning_rate) * (hps.decay_rate) ** step + hps.min_learning_rate
 

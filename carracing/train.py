@@ -65,7 +65,7 @@ BC_SEQ_LENGTH = 100
 MAX_ARCHIVE_ELEMENTS = 500
 PROBABILITY_ADD = 0.1
 N_NEAREST_NEIGHBOURS = 10
-FIXED_MAP = True
+FIXED_MAP = False
 FIXED_SEED = 30
 
 INITIAL_W = 1.0
@@ -93,7 +93,7 @@ def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
   elif novelty_mode == 'a_concat':
     BC_SIZE = BC_SEQ_LENGTH * A_SIZE
   else:
-    raise ValueError('Not recognised novelty_mode: {}'.format(novelty_mode))
+    BC_SIZE = 9  # dummy bc size not used because the reward if the distance travelled.
 
   if novelty_mode:
     filebase = filebase + '.' + novelty_mode
@@ -312,7 +312,7 @@ def evaluate_batch(model_params, max_len=-1):
     solutions.append(np.copy(model_params))
 
   seeds = np.arange(es.popsize)
-  if FIXED_SEED:
+  if FIXED_MAP:
     seeds = [FIXED_SEED] * es.popsize
 
   packet_list = encode_solution_packets(seeds, solutions, train_mode=0, max_len=max_len)
@@ -564,4 +564,5 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
   if "parent" == mpi_fork(args.num_worker+1): os.exit()
+  print('Training with fixed map:', FIXED_MAP)
   main(args)
